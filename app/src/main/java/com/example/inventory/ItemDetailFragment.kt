@@ -1,21 +1,4 @@
-/*
- * Copyright (C) 2021 The Android Open Source Project.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.example.inventory
-
 
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -35,32 +18,16 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
  */
 class ItemDetailFragment : Fragment() {
     private val navigationArgs: ItemDetailFragmentArgs by navArgs()
-
-    private var _binding: FragmentItemDetailBinding? = null
-    private val binding get() = _binding!!
     lateinit var item: Item
+
     private val viewModel: InventoryViewModel by activityViewModels {
         InventoryViewModelFactory(
             (activity?.application as InventoryApplication).database.itemDao()
         )
     }
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        val id = navigationArgs.itemId
-        viewModel.retrieveItem(id).observe(this.viewLifecycleOwner) { selectedItem ->
-            item = selectedItem
-            bind(item)
-        }
-    }
-
-    private fun bind(item: Item) {
-        binding.apply {
-            itemName.text = item.itemName
-            itemPrice.text = item.getFormattedPrice()
-            itemCount.text = item.quantityInStock.toString()
-        }
-    }
+    private var _binding: FragmentItemDetailBinding? = null
+    private val binding get() = _binding!!
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -69,6 +36,32 @@ class ItemDetailFragment : Fragment() {
     ): View? {
         _binding = FragmentItemDetailBinding.inflate(inflater, container, false)
         return binding.root
+    }
+
+    /**
+     * Binds views with the passed in item data.
+     */
+    private fun bind(item: Item) {
+        binding.apply {
+            itemName.text = item.itemName
+            itemPrice.text = item.getFormattedPrice()
+            itemCount.text = item.quantityInStock.toString()
+            sellItem.isEnabled = viewModel.isStockAvailable(item)
+            sellItem.setOnClickListener { viewModel.sellItem(item) }
+            deleteItem.setOnClickListener { showConfirmationDialog() }
+            editItem.setOnClickListener { editItem() }
+        }
+    }
+
+    /**
+     * Navigate to the Edit item screen.
+     */
+    private fun editItem() {
+        val action = ItemDetailFragmentDirections.actionItemDetailFragmentToAddItemFragment(
+            getString(R.string.edit_fragment_title),
+            item.id
+        )
+        this.findNavController().navigate(action)
     }
 
     /**
@@ -90,7 +83,20 @@ class ItemDetailFragment : Fragment() {
      * Deletes the current item and navigates to the list fragment.
      */
     private fun deleteItem() {
+        viewModel.deleteItem(item)
         findNavController().navigateUp()
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        val id = navigationArgs.itemId
+        // Retrieve the item details using the itemId.
+        // Attach an observer on the data (instead of polling for changes) and only update the
+        // the UI when the data actually changes.
+        viewModel.retrieveItem(id).observe(this.viewLifecycleOwner) { selectedItem ->
+            item = selectedItem
+            bind(item)
+        }
     }
 
     /**
